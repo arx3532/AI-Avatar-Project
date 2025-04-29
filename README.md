@@ -1,1 +1,1 @@
-# AI_Avatar_Project
+# AI Avatar Project
