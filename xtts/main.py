@@ -4,6 +4,7 @@ from utils import extract_audio, clone_audio, save_to_db
 from typing import Optional
 from pydantic import BaseModel
 import os 
+from best_frame_extractor import extract_best_avatar_frame 
 
 app = FastAPI(title="Voice Cloning API")
 
@@ -16,6 +17,11 @@ class VoiceCloneRequest(BaseModel):
     user_id : str
     text: str
     reference_audio_path: str
+
+class FrameResponse(BaseModel):
+    user_id: str
+    frame_path: Optional[str] = None
+    message: str
 
 model = load_model()
 model.cpu()
@@ -46,6 +52,32 @@ async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: st
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error extracting audio: {str(e)}")
+
+@app.post("/extract-best-frame/", response_model=FrameResponse)
+async def extract_best_frame_endpoint(
+    video_file: UploadFile = File(...),
+    user_id: str = Form(...)
+):
+    try:
+        if not video_file.filename.lower().endswith(('.mp4', '.mov', '.avi')):
+            raise HTTPException(status_code=400, detail="Invalid File Format")
+
+        video_path = f"uploaded_videos/{user_id}_{video_file.filename}"
+        os.makedirs("uploaded_videos", exist_ok=True)
+        with open(video_path, 'wb') as f:
+            f.write(await video_file.read())
+
+        frame_path = extract_best_avatar_frame(video_path, output_dir="best_frames", user_id=user_id)
+
+        return FrameResponse(
+            user_id=user_id,
+            frame_path=frame_path,
+            message="Best Avatar Frame Extracted Successfully"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error extracting best frame: {str(e)}")
+
 
 @app.post('/clone-voice/', response_model=AudioResponse)
 async def clone_voice_endpoint(request: VoiceCloneRequest):
@@ -94,3 +126,5 @@ async def display_extracted_audio(user_id: str=Query(...)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error displaying extracted audio.")
+    
+    
