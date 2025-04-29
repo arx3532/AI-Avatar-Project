@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query
 from model_config import load_model
 from utils import extract_audio, clone_audio, save_to_db
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel
 import os 
 from best_frame_extractor import extract_best_avatar_frame 
@@ -18,15 +18,16 @@ class VoiceCloneRequest(BaseModel):
     text: str
     reference_audio_path: str
 
-class FrameResponse(BaseModel):
+class CombinedResponse(BaseModel):
     user_id: str
+    audio_path : Optional[str] = None
     frame_path: Optional[str] = None
     message: str
 
 model = load_model()
 model.cpu()
 
-@app.post("/extract-audio/", response_model=AudioResponse)
+@app.post("/extract-audio-bestframe/", response_model=CombinedResponse)
 async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...)):
     #Extract audio from uploaded video file
     try:
@@ -44,40 +45,18 @@ async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: st
         extract_audio(video_path,audio_path)
         save_to_db(user_id, audio_path)
 
-        return AudioResponse(
+        frame_path = extract_best_avatar_frame(video_path, output_dir="best_frames", user_id=user_id)
+
+        return CombinedResponse(
             user_id=user_id,
             audio_path=audio_path,
+            frame_path=frame_path,
             message="Audio Extracted Successfully"
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error extracting audio: {str(e)}")
-
-@app.post("/extract-best-frame/", response_model=FrameResponse)
-async def extract_best_frame_endpoint(
-    video_file: UploadFile = File(...),
-    user_id: str = Form(...)
-):
-    try:
-        if not video_file.filename.lower().endswith(('.mp4', '.mov', '.avi')):
-            raise HTTPException(status_code=400, detail="Invalid File Format")
-
-        video_path = f"uploaded_videos/{user_id}_{video_file.filename}"
-        os.makedirs("uploaded_videos", exist_ok=True)
-        with open(video_path, 'wb') as f:
-            f.write(await video_file.read())
-
-        frame_path = extract_best_avatar_frame(video_path, output_dir="best_frames", user_id=user_id)
-
-        return FrameResponse(
-            user_id=user_id,
-            frame_path=frame_path,
-            message="Best Avatar Frame Extracted Successfully"
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error extracting best frame: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    
 
 @app.post('/clone-voice/', response_model=AudioResponse)
 async def clone_voice_endpoint(request: VoiceCloneRequest):
