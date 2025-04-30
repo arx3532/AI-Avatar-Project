@@ -13,20 +13,21 @@ def extract_audio(input_video: str, output_audio: str):
 def save_audio(wav_tensor, path: str, sample_rate: int = 24000):
     torchaudio.save(path, torch.tensor(wav_tensor).unsqueeze(0), sample_rate)
 
-def save_to_db(user_id, reference_audio_path):
+def save_to_db(user_id, avatar_id, reference_audio_path):
     audio_blob, audio_shape, sample_rate = audio_to_numpy(reference_audio_path)
     conn = sqlite3.connect('avatar-database.db')
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS speaker_embed (
             user_id TEXT,
+            avatar_id TEXT,
             audio_blob BLOB,
             audio_shape TEXT,
             sample_rate INTEGER
             )
     """)
 
-    c.execute("""REPLACE INTO speaker_embed (user_id, audio_blob,audio_shape,sample_rate) 
-            VALUES (?, ?, ?, ?)""",(user_id, audio_blob,json.dumps(audio_shape), sample_rate))
+    c.execute("""REPLACE INTO speaker_embed (user_id, avatar_id, audio_blob,audio_shape,sample_rate) 
+            VALUES (?, ?, ?, ?, ?)""",(user_id, avatar_id, audio_blob,json.dumps(audio_shape), sample_rate))
 
     conn.commit()
     conn.close()
@@ -41,13 +42,13 @@ def audio_to_numpy(reference_audio_path):
     audio_shape = audio_np.shape
     return audio_blob,audio_shape, sample_rate
 
-def clone_audio(model,user_id,gen_text,output_audio_path):
+def clone_audio(model,user_id, avatar_id, gen_text,output_audio_path):
     conn = sqlite3.connect('voice-clone.db')
     c = conn.cursor()
     c.execute(
         """
-    SELECT audio_blob,audio_shape,sample_rate FROM speaker_embed where user_id = ?    
-        """,(user_id,)
+    SELECT audio_blob,audio_shape,sample_rate FROM speaker_embed where user_id = ? and avatar_id = ?   
+        """,(user_id, avatar_id)
     )
     result = c.fetchone()
     conn.close()

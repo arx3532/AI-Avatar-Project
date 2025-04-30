@@ -20,30 +20,32 @@ def rotate_image(image, center, angle):
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     return cv2.warpAffine(image, M, (image.shape[1], image.shape[0]))
 
-def save_image_to_db(user_id: str, image: np.ndarray, score: float, db_path='avatar-database.db'):
+def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: float, db_path='avatar-database.db'):
     image_blob = image.tobytes()
     image_shape = json.dumps(image.shape)
 
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS avatar_frames (
-        user_id TEXT PRIMARY KEY,
+        user_id TEXT,
+        avatar_id TEXT,
         image_blob BLOB,
         image_shape TEXT,
-        score REAL
+        score REAL,
+        PRIMARY KEY(user_id, avatar_id)
     )""")
 
-    c.execute("""REPLACE INTO avatar_frames (user_id, image_blob, image_shape, score) 
-        VALUES (?, ?, ?, ?)""", (user_id, image_blob, image_shape, score))
+    c.execute("""REPLACE INTO avatar_frames (user_id, avatar_id, image_blob, image_shape, score) 
+        VALUES (?, ?, ?, ?, ?)""", (user_id, avatar_id, image_blob, image_shape, score))
 
     conn.commit()
     conn.close()
-    print(f"💾 Best avatar frame saved to DB for user: {user_id}")
+    print(f"💾 Best avatar frame saved to DB for user {user_id} : {avatar_id}")
 
-def load_image_from_db(user_id: str, db_path='avatar-database.db') -> np.ndarray:
+def load_image_from_db(user_id: str, avatar_id : str, db_path='avatar-database.db') -> np.ndarray:
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ?", (user_id,))
+    c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ? and avatar_id = ?", (user_id, avatar_id))
     result = c.fetchone()
     conn.close()
 
@@ -55,7 +57,7 @@ def load_image_from_db(user_id: str, db_path='avatar-database.db') -> np.ndarray
     else:
         raise ValueError(f"No image found in DB for user {user_id}")
 
-def extract_best_avatar_frame(video_path, user_id,output_dir="outputs"):
+def extract_best_avatar_frame(video_path, user_id, avatar_id,output_dir="outputs"):
     os.makedirs(output_dir, exist_ok=True)
 
     cap = cv2.VideoCapture(video_path)
@@ -159,15 +161,15 @@ def extract_best_avatar_frame(video_path, user_id,output_dir="outputs"):
     print(f"\n🔍 Total frames with face detected: {face_detected_frames}")
 
     if best_frame is not None:
-        result_path = os.path.join(output_dir, f"best_frame_{user_id}.jpg")
+        result_path = os.path.join(output_dir, f"best_frame_{avatar_id}.jpg")
         cv2.imwrite(result_path, best_frame)
-        save_image_to_db(user_id, best_frame, best_score)
+        save_image_to_db(user_id, avatar_id, best_frame, best_score)
         print(f"\n✅ Best avatar frame saved! Score: {best_score:.2f}")
         return result_path
     else:
         fallback_path = os.path.join(output_dir, "fallback_avatar_face.jpg")
         cv2.imwrite(fallback_path, fallback_frame)
-        save_image_to_db(user_id, fallback_frame, fallback_score)
+        save_image_to_db(user_id, avatar_id, fallback_frame, fallback_score)
         print(f"\n⚠ No perfect match. Fallback saved. Score: {fallback_score:.2f}")
         return fallback_path
 
