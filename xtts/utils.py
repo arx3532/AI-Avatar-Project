@@ -43,7 +43,7 @@ def audio_to_numpy(reference_audio_path):
     return audio_blob,audio_shape, sample_rate
 
 def clone_audio(model,user_id, avatar_id, gen_text,output_audio_path):
-    conn = sqlite3.connect('voice-clone.db')
+    conn = sqlite3.connect('avatar-database.db')
     c = conn.cursor()
     c.execute(
         """

@@ -4,7 +4,7 @@ from utils import extract_audio, clone_audio, save_to_db
 from typing import Optional, Union
 from pydantic import BaseModel
 import os 
-from best_frame_extractor import extract_best_avatar_frame 
+from best_frame_extractor import extract_best_avatar_frame, load_image_from_db
 
 app = FastAPI(title="Voice Cloning API")
 
@@ -12,7 +12,6 @@ class AudioResponse(BaseModel):
     user_id: str
     avatar_id: str
     audio_path : Optional[str] = None
-    message: str
 
 class VoiceCloneRequest(BaseModel):
     user_id : str
@@ -25,7 +24,6 @@ class CombinedResponse(BaseModel):
     avatar_id: str
     audio_path : Optional[str] = None
     frame_path: Optional[str] = None
-    message: str
 
 model = load_model()
 model.cpu()
@@ -48,28 +46,24 @@ async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: st
         extract_audio(video_path,audio_path)
         save_to_db(user_id, avatar_id,  audio_path)
 
-        frame_path = extract_best_avatar_frame(
+        extract_best_avatar_frame(
             video_path=video_path,
             user_id=user_id,
-            avatar_id=avatar_id,
-            output_dir="best_frames"
+            avatar_id=avatar_id
         )
 
-
-        return CombinedResponse(
+        return AudioResponse(
             user_id=user_id,
             avatar_id=avatar_id,
-            audio_path=audio_path,
-            frame_path=frame_path,
-            message="Audio Extracted Successfully"
+            audio_path=audio_path
         )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     
 
-@app.post('/clone-voice/', response_model=AudioResponse)
-async def clone_voice_endpoint(request: VoiceCloneRequest):
+@app.post('/generate-avatar/', response_model=AudioResponse)
+async def generate_endpoint(request: VoiceCloneRequest):
     try:
         if not request.text:
             raise HTTPException(status_code=400, detail='Text input is required!')
@@ -77,14 +71,15 @@ async def clone_voice_endpoint(request: VoiceCloneRequest):
         output_audio_path = f"generated_audios/{request.user_id}_{request.avatar_id}_generated.wav"
         os.makedirs("generated_audios", exist_ok=True)
         clone_audio(model, request.user_id, request.avatar_id, request.text, output_audio_path)
-        return AudioResponse(
+        frame_path = load_image_from_db(user_id=request.user_id, avatar_id=request.avatar_id)
+        return CombinedResponse(
             user_id=request.user_id,
             avatar_id = request.avatar_id,
             audio_path=output_audio_path,
-            message="Voice Cloned Successfully"
+            frame_path=frame_path
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error Cloning Voice: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 @app.get("/generated-audio/", response_model=AudioResponse)
 async def display_generated_audio(user_id: str = Query(...), avatar_id: str = Query(...)):

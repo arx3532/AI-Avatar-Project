@@ -42,10 +42,14 @@ def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: floa
     conn.close()
     print(f"💾 Best avatar frame saved to DB for user {user_id} : {avatar_id}")
 
-def load_image_from_db(user_id: str, avatar_id : str, db_path='avatar-database.db') -> np.ndarray:
+def load_image_from_db(user_id: str, avatar_id: str, db_path='avatar-database.db', 
+                       save_dir='saved_avatars'):
+    
+    os.makedirs(save_dir, exist_ok=True)
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ? and avatar_id = ?", (user_id, avatar_id))
+    c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ? and avatar_id = ?", 
+              (user_id, avatar_id))
     result = c.fetchone()
     conn.close()
 
@@ -53,12 +57,16 @@ def load_image_from_db(user_id: str, avatar_id : str, db_path='avatar-database.d
         blob, shape = result
         shape = tuple(json.loads(shape))
         image_np = np.frombuffer(blob, dtype=np.uint8).reshape(shape)
-        return image_np
+
+        filename = f"{user_id}_{avatar_id}.png"
+        filepath = os.path.join(save_dir, filename)
+        cv2.imwrite(filepath, image_np)
+        return filepath
+    
     else:
         raise ValueError(f"No image found in DB for user {user_id}")
 
-def extract_best_avatar_frame(video_path, user_id, avatar_id,output_dir="outputs"):
-    os.makedirs(output_dir, exist_ok=True)
+def extract_best_avatar_frame(video_path, user_id, avatar_id):
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -161,16 +169,12 @@ def extract_best_avatar_frame(video_path, user_id, avatar_id,output_dir="outputs
     print(f"\n🔍 Total frames with face detected: {face_detected_frames}")
 
     if best_frame is not None:
-        result_path = os.path.join(output_dir, f"best_frame_{avatar_id}.jpg")
-        cv2.imwrite(result_path, best_frame)
         save_image_to_db(user_id, avatar_id, best_frame, best_score)
         print(f"\n✅ Best avatar frame saved! Score: {best_score:.2f}")
-        return result_path
+
     else:
-        fallback_path = os.path.join(output_dir, "fallback_avatar_face.jpg")
-        cv2.imwrite(fallback_path, fallback_frame)
         save_image_to_db(user_id, avatar_id, fallback_frame, fallback_score)
         print(f"\n⚠ No perfect match. Fallback saved. Score: {fallback_score:.2f}")
-        return fallback_path
+        
 
 
