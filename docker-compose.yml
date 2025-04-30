@@ -1,0 +1,48 @@
+version: '3.8'
+services:
+  fastapi:
+    build: ./fastapi-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - XTTS_URL=http://xtts:8001
+      - SADTalkER_URL=http://sadtalker:8002
+    depends_on:
+      - xtts
+      - sadtalker
+
+  xtts:
+    build: ./xtts
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./xtts/uploaded_videos:/app/uploaded_videos
+      - ./xtts/extracted_audios:/app/extracted_audios
+      - ./xtts/generated_audios:/app/generated_audios
+      - ./xtts/avatar-database.db:/app/avatar-database.db
+    # Uncomment for GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  sadtalker:
+    build: ./sadtalker
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./sadtalker/generated_videos:/app/generated_videos
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  default:
+    driver: bridge
