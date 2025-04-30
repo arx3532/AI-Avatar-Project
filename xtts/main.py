@@ -27,7 +27,7 @@ class CombinedResponse(BaseModel):
 model = load_model()
 model.cpu()
 
-@app.post("/extract-audio-bestframe/", response_model=CombinedResponse)
+@app.post("/extract-audio-and-bestframe/", response_model=CombinedResponse)
 async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...)):
     #Extract audio from uploaded video file
     try:

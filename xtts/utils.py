@@ -15,7 +15,7 @@ def save_audio(wav_tensor, path: str, sample_rate: int = 24000):
 
 def save_to_db(user_id, reference_audio_path):
     audio_blob, audio_shape, sample_rate = audio_to_numpy(reference_audio_path)
-    conn = sqlite3.connect('voice-clone.db')
+    conn = sqlite3.connect('avatar-database.db')
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS speaker_embed (
             user_id TEXT,

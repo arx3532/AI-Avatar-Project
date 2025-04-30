@@ -2,12 +2,9 @@ import cv2
 import numpy as np
 import math
 import mediapipe as mp
-import time
 import os
 import sqlite3
 import json
-
-# ------------------ Utility Functions ------------------
 
 def get_eye_angle(left_eye, right_eye):
     dx = right_eye[0] - left_eye[0]
@@ -23,7 +20,7 @@ def rotate_image(image, center, angle):
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     return cv2.warpAffine(image, M, (image.shape[1], image.shape[0]))
 
-def save_image_to_db(user_id: str, image: np.ndarray, score: float, db_path='voice-clone.db'):
+def save_image_to_db(user_id: str, image: np.ndarray, score: float, db_path='avatar-database.db'):
     image_blob = image.tobytes()
     image_shape = json.dumps(image.shape)
 
@@ -43,7 +40,7 @@ def save_image_to_db(user_id: str, image: np.ndarray, score: float, db_path='voi
     conn.close()
     print(f"💾 Best avatar frame saved to DB for user: {user_id}")
 
-def load_image_from_db(user_id: str, db_path='voice-clone.db') -> np.ndarray:
+def load_image_from_db(user_id: str, db_path='avatar-database.db') -> np.ndarray:
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ?", (user_id,))
@@ -57,8 +54,6 @@ def load_image_from_db(user_id: str, db_path='voice-clone.db') -> np.ndarray:
         return image_np
     else:
         raise ValueError(f"No image found in DB for user {user_id}")
-
-# ------------------ Main Frame Extraction Function ------------------
 
 def extract_best_avatar_frame(video_path, user_id,output_dir="outputs"):
     os.makedirs(output_dir, exist_ok=True)
