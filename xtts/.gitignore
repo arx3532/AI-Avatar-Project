@@ -4,4 +4,5 @@ uploaded_videos
 extracted_audios
 best_frames
 avatar-database.db
-best_frames
+generated_audios
+saved_avatars
