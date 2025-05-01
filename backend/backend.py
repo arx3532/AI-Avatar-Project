@@ -39,7 +39,7 @@ async def generate_avatar(
         # Step 2: Clone voice using extracted audio with avatar_id
         async with httpx.AsyncClient() as client:
             xtts_clone_response = await client.post(
-                "http://xtts:8001/clone-voice/",
+                "http://xtts:8001/synthesize-voice-frame/",
                 json={
                     "user_id": user_id,
                     "avatar_id": avatar_id,

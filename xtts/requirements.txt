@@ -11,7 +11,6 @@ fsspec==2025.3.2
 flask==3.1.0
 fastapi==0.115.12
 g2pkk==0.1.2
-gruut==2.2.3
 hangul-romanize==0.1.0
 inflect==7.5.0
 jamo==0.4.1

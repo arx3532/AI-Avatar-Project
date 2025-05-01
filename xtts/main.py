@@ -29,7 +29,7 @@ model = load_model()
 model.cpu()
 
 @app.post("/extract-audio-and-bestframe/", response_model=CombinedResponse)
-async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...)):
+async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...)):
     #Extract audio from uploaded video file
     try:
         if not video_file.filename.lower().endswith(('.mp4','.mov','.avi')):
@@ -62,8 +62,8 @@ async def extract_audio_endpoint(video_file: UploadFile = File(...), user_id: st
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     
 
-@app.post('/generate-avatar/', response_model=AudioResponse)
-async def generate_endpoint(request: VoiceCloneRequest):
+@app.post('/synthesize-voice-frame/', response_model=AudioResponse)
+async def synthesize_endpoint(request: VoiceCloneRequest):
     try:
         if not request.text:
             raise HTTPException(status_code=400, detail='Text input is required!')
