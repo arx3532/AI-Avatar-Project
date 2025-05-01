@@ -42,7 +42,7 @@ def audio_to_numpy(reference_audio_path):
     audio_shape = audio_np.shape
     return audio_blob,audio_shape, sample_rate
 
-def clone_audio(model,user_id, avatar_id, gen_text,output_audio_path):
+def load_audio(user_id, avatar_id):
     conn = sqlite3.connect('avatar-database.db')
     c = conn.cursor()
     c.execute(
@@ -60,10 +60,12 @@ def clone_audio(model,user_id, avatar_id, gen_text,output_audio_path):
         audio_tensor = torch.from_numpy(audio_np)
         temp_audio_path = "temp_audio.wav"
         torchaudio.save(temp_audio_path, audio_tensor, sample_rate)
-
+        return temp_audio_path
     else:
         print("Data Not Found. Try Creating One.")
         return
+    
+def clone_output(model,gen_text,output_audio_path,temp_audio_path):
     gpt_cond_latent, speaker_embedding = model.get_conditioning_latents(audio_path = temp_audio_path)
     out = model.inference(
         gen_text,

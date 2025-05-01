@@ -22,7 +22,7 @@ RUN mkdir -p \
     uploaded_videos \
     extracted_audios \
     generated_audios \
-    best_frames \
+    saved_avatars \
     && chown -R appuser:appuser /app
 
 USER appuser

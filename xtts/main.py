@@ -1,10 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Query
 from model_config import load_model
-from utils import extract_audio, clone_audio, save_to_db
-from typing import Optional, Union
+from utils import extract_audio, clone_output, save_to_db, load_audio
+from typing import Optional
 from pydantic import BaseModel
 import os 
 from best_frame_extractor import extract_best_avatar_frame, load_image_from_db
+import cv2
+import shutil
 
 app = FastAPI(title="Voice Cloning API")
 
@@ -17,7 +19,10 @@ class VoiceCloneRequest(BaseModel):
     user_id : str
     avatar_id: str
     text: str
-    reference_audio_path: str
+
+class DisplayRequest(BaseModel):
+    user_id: str
+    avatar_id: str
 
 class CombinedResponse(BaseModel):
     user_id: str
@@ -51,18 +56,18 @@ async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_
             user_id=user_id,
             avatar_id=avatar_id
         )
-
+        shutil.rmtree("uploaded_videos")
+        shutil.rmtree("extracted_audios")
         return AudioResponse(
             user_id=user_id,
             avatar_id=avatar_id,
             audio_path=audio_path
         )
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     
 
-@app.post('/synthesize-voice-frame/', response_model=AudioResponse)
+@app.post('/synthesize-voice-frame/', response_model=CombinedResponse)
 async def synthesize_endpoint(request: VoiceCloneRequest):
     try:
         if not request.text:
@@ -70,8 +75,15 @@ async def synthesize_endpoint(request: VoiceCloneRequest):
         
         output_audio_path = f"generated_audios/{request.user_id}_{request.avatar_id}_generated.wav"
         os.makedirs("generated_audios", exist_ok=True)
-        clone_audio(model, request.user_id, request.avatar_id, request.text, output_audio_path)
-        frame_path = load_image_from_db(user_id=request.user_id, avatar_id=request.avatar_id)
+        temp_audio_path = load_audio(request.user_id, request.avatar_id)
+        clone_output(model, request.text, output_audio_path, temp_audio_path)
+        
+        os.makedirs("saved_avatars", exist_ok=True)
+        image_np = load_image_from_db(request.user_id, request.avatar_id)
+        filename = f"{request.user_id}_{request.avatar_id}.png"
+        frame_path = os.path.join("saved_avatars", filename)
+        cv2.imwrite(frame_path, image_np)
+
         return CombinedResponse(
             user_id=request.user_id,
             avatar_id = request.avatar_id,
@@ -82,19 +94,18 @@ async def synthesize_endpoint(request: VoiceCloneRequest):
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 @app.get("/generated-audio/", response_model=AudioResponse)
-async def display_generated_audio(user_id: str = Query(...), avatar_id: str = Query(...)):
+async def display_generated_audio(request: DisplayRequest):
     try:
-        output_audio_path = f"generated_audios/{user_id}_{avatar_id}_generated.wav"
-
+        output_audio_path = load_audio(request.user_id, request.avatar_id)
         if not os.path.exists(output_audio_path):
             raise HTTPException(status_code=404, detail="Audio file not found.")
         
         return AudioResponse(
-            user_id= user_id,
-            avatar_id = avatar_id,
+            user_id= request.user_id,
+            avatar_id = request.avatar_id,
             audio_path=output_audio_path,
-            message="Displayed Generated Voice Successfully"
         )
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error Displaying Generated Audio: {str(e)}")
 
@@ -108,8 +119,7 @@ async def display_extracted_audio(user_id: str=Query(...), avatar_id: str = Quer
         return AudioResponse(
             user_id=user_id,
             avatar_id = avatar_id,
-            audio_path=audio_path,
-            message="Displayed Extracted Voice Successfully"
+            audio_path=audio_path
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error displaying extracted audio.")

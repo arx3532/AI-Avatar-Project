@@ -42,10 +42,7 @@ def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: floa
     conn.close()
     print(f"💾 Best avatar frame saved to DB for user {user_id} : {avatar_id}")
 
-def load_image_from_db(user_id: str, avatar_id: str, db_path='avatar-database.db', 
-                       save_dir='saved_avatars'):
-    
-    os.makedirs(save_dir, exist_ok=True)
+def load_image_from_db(user_id: str, avatar_id: str, db_path='avatar-database.db'):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ? and avatar_id = ?", 
@@ -57,11 +54,7 @@ def load_image_from_db(user_id: str, avatar_id: str, db_path='avatar-database.db
         blob, shape = result
         shape = tuple(json.loads(shape))
         image_np = np.frombuffer(blob, dtype=np.uint8).reshape(shape)
-
-        filename = f"{user_id}_{avatar_id}.png"
-        filepath = os.path.join(save_dir, filename)
-        cv2.imwrite(filepath, image_np)
-        return filepath
+        return image_np
     
     else:
         raise ValueError(f"No image found in DB for user {user_id}")
