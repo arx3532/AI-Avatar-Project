@@ -12,44 +12,48 @@ app = FastAPI(title="Voice Cloning API")
 
 class AudioResponse(BaseModel):
     user_id: str
-    avatar_id: str
+    audio_id: str
     audio_path : Optional[str] = None
+    message: Optional[str] = None
 
-class VoiceCloneRequest(BaseModel):
+class GeneratorRequest(BaseModel):
     user_id : str
     avatar_id: str
+    audio_id: str
     text: str
 
 class DisplayRequest(BaseModel):
     user_id: str
     avatar_id: str
+    audio_id: str
 
 class CombinedResponse(BaseModel):
     user_id: str
     avatar_id: str
+    audio_id: str
     audio_path : Optional[str] = None
     frame_path: Optional[str] = None
 
 model = load_model()
 model.cpu()
 
-@app.post("/extract-audio-and-bestframe/", response_model=AudioResponse)
-async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...)):
+@app.post("/extract-audio-and-bestframe/", response_model=CombinedResponse)
+async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...), audio_id: str = Form(...)):
     #Extract audio from uploaded video file
     try:
         if not video_file.filename.lower().endswith(('.mp4','.mov','.avi')):
             raise HTTPException(status_code=400, detail="Invalid File Format.")
         
-        video_path = f"uploaded_videos/{user_id}_{avatar_id}_{video_file.filename}"
-        os.makedirs("uploaded_videos", exist_ok=True)
+        video_path = f"../shared/uploaded_videos/{user_id}_{avatar_id}_{audio_id}_{video_file.filename}"
+        os.makedirs("../shared/uploaded_videos", exist_ok=True)
         with open(video_path,'wb') as f:
             f.write(await video_file.read())
 
-        audio_path = f"extracted_audios/{user_id}_{avatar_id}_extracted.wav"
-        os.makedirs("extracted_audios", exist_ok=True)
+        audio_path = f"../shared/extracted_audios/{user_id}_{audio_id}_extracted.wav"
+        os.makedirs("../shared/extracted_audios", exist_ok=True)
 
         extract_audio(video_path,audio_path)
-        save_to_db(user_id, avatar_id,  audio_path)
+        save_to_db(user_id, audio_id,  audio_path)
 
         extract_best_avatar_frame(
             video_path=video_path,
@@ -57,40 +61,43 @@ async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_
             avatar_id=avatar_id
         )
         try:
-            clear_folder("uploaded_videos")
-            clear_folder("extracted_audios")
+            clear_folder("../shared/uploaded_videos")
+            clear_folder("../shared/extracted_audios")
         except Exception as cleanup_err:
             print(f"Cleanup failed: {cleanup_err}")
 
-        return AudioResponse(
+        return CombinedResponse(
             user_id=user_id,
+            audio_id=audio_id,
             avatar_id=avatar_id,
-            audio_path=audio_path
+            audio_path=audio_path,
+            frame_path=f"../shared/extracted_frames/{user_id}_{avatar_id}_frame.jpg"
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     
 
 @app.post('/synthesize-voice-frame/', response_model=CombinedResponse)
-async def synthesize_endpoint(request: VoiceCloneRequest):
+async def synthesize_endpoint(request: GeneratorRequest):
     try:
         if not request.text:
             raise HTTPException(status_code=400, detail='Text input is required!')
         
-        output_audio_path = f"generated_audios/{request.user_id}_{request.avatar_id}_generated.wav"
-        os.makedirs("generated_audios", exist_ok=True)
-        temp_audio_path = load_audio(request.user_id, request.avatar_id)
+        output_audio_path = f"../shared/generated_audios/{request.user_id}_{request.audio_id}_generated.wav"
+        os.makedirs("../shared/generated_audios", exist_ok=True)
+        temp_audio_path = load_audio(request.user_id, request.audio_id)
         clone_output(model, request.text, output_audio_path, temp_audio_path)
         
-        os.makedirs("saved_avatars", exist_ok=True)
+        os.makedirs("../shared/saved_avatars", exist_ok=True)
         image_np = load_image_from_db(request.user_id, request.avatar_id)
         filename = f"{request.user_id}_{request.avatar_id}.png"
-        frame_path = os.path.join("saved_avatars", filename)
+        frame_path = os.path.join("../shared/saved_avatars", filename)
         cv2.imwrite(frame_path, image_np)
 
         return CombinedResponse(
             user_id=request.user_id,
             avatar_id = request.avatar_id,
+            audio_id = request.audio_id,
             audio_path=output_audio_path,
             frame_path=frame_path
         )
@@ -100,13 +107,13 @@ async def synthesize_endpoint(request: VoiceCloneRequest):
 @app.get("/generated-audio/", response_model=AudioResponse)
 async def display_generated_audio(request: DisplayRequest):
     try:
-        output_audio_path = load_audio(request.user_id, request.avatar_id)
+        output_audio_path = load_audio(request.user_id, request.audio_id)
         if not os.path.exists(output_audio_path):
             raise HTTPException(status_code=404, detail="Audio file not found.")
         
         return AudioResponse(
             user_id= request.user_id,
-            avatar_id = request.avatar_id,
+            audio_id = request.audio_id,
             audio_path=output_audio_path,
         )
     
@@ -114,15 +121,15 @@ async def display_generated_audio(request: DisplayRequest):
         raise HTTPException(status_code=500, detail=f"Error Displaying Generated Audio: {str(e)}")
 
 @app.get("/extracted-audio/", response_model=AudioResponse)
-async def display_extracted_audio(user_id: str=Query(...), avatar_id: str = Query(...)):
+async def display_extracted_audio(user_id: str=Query(...), audio_id: str = Query(...)):
     try:
-        audio_path = f"extracted_audios/{user_id}_{avatar_id}_extracted.wav"
+        audio_path = f"../shared/extracted_audios/{user_id}_{audio_id}_extracted.wav"
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=404, detail="Audio Not Found.")
         
         return AudioResponse(
             user_id=user_id,
-            avatar_id = avatar_id,
+            audio_id = audio_id,
             audio_path=audio_path
         )
     except Exception as e:

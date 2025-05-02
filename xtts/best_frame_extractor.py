@@ -20,7 +20,7 @@ def rotate_image(image, center, angle):
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     return cv2.warpAffine(image, M, (image.shape[1], image.shape[0]))
 
-def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: float, db_path='avatar-database.db'):
+def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: float, db_path='../shared/avatar-database.db'):
     image_blob = image.tobytes()
     image_shape = json.dumps(image.shape)
 
@@ -42,7 +42,7 @@ def save_image_to_db(user_id: str,avatar_id: str, image: np.ndarray, score: floa
     conn.close()
     print(f"💾 Best avatar frame saved to DB for user {user_id} : {avatar_id}")
 
-def load_image_from_db(user_id: str, avatar_id: str, db_path='avatar-database.db'):
+def load_image_from_db(user_id: str, avatar_id: str, db_path='../shared/avatar-database.db'):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("SELECT image_blob, image_shape FROM avatar_frames WHERE user_id = ? and avatar_id = ?", 

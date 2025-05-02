@@ -13,21 +13,21 @@ def extract_audio(input_video: str, output_audio: str):
 def save_audio(wav_tensor, path: str, sample_rate: int = 24000):
     torchaudio.save(path, torch.tensor(wav_tensor).unsqueeze(0), sample_rate)
 
-def save_to_db(user_id, avatar_id, reference_audio_path):
+def save_to_db(user_id, audio_id, reference_audio_path):
     audio_blob, audio_shape, sample_rate = audio_to_numpy(reference_audio_path)
-    conn = sqlite3.connect('avatar-database.db')
+    conn = sqlite3.connect('../shared/avatar-database.db')
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS speaker_embed (
             user_id TEXT,
-            avatar_id TEXT,
+            audio_id TEXT,
             audio_blob BLOB,
             audio_shape TEXT,
             sample_rate INTEGER
             )
     """)
 
-    c.execute("""REPLACE INTO speaker_embed (user_id, avatar_id, audio_blob,audio_shape,sample_rate) 
-            VALUES (?, ?, ?, ?, ?)""",(user_id, avatar_id, audio_blob,json.dumps(audio_shape), sample_rate))
+    c.execute("""REPLACE INTO speaker_embed (user_id, audio_id, audio_blob,audio_shape,sample_rate) 
+            VALUES (?, ?, ?, ?, ?)""",(user_id, audio_id, audio_blob,json.dumps(audio_shape), sample_rate))
 
     conn.commit()
     conn.close()
@@ -42,13 +42,13 @@ def audio_to_numpy(reference_audio_path):
     audio_shape = audio_np.shape
     return audio_blob,audio_shape, sample_rate
 
-def load_audio(user_id, avatar_id):
-    conn = sqlite3.connect('avatar-database.db')
+def load_audio(user_id, audio_id):
+    conn = sqlite3.connect('../shared/avatar-database.db')
     c = conn.cursor()
     c.execute(
         """
-    SELECT audio_blob,audio_shape,sample_rate FROM speaker_embed where user_id = ? and avatar_id = ?   
-        """,(user_id, avatar_id)
+    SELECT audio_blob,audio_shape,sample_rate FROM speaker_embed where user_id = ? and audio_id = ?   
+        """,(user_id, audio_id)
     )
     result = c.fetchone()
     conn.close()
@@ -58,7 +58,7 @@ def load_audio(user_id, avatar_id):
         audio_np = np.frombuffer(audio_blob, dtype=np.float32).reshape(audio_shape)
         audio_np = audio_np.copy()
         audio_tensor = torch.from_numpy(audio_np)
-        temp_audio_path = "temp_audio.wav"
+        temp_audio_path = "../shared/temp_audio.wav"
         torchaudio.save(temp_audio_path, audio_tensor, sample_rate)
         return temp_audio_path
     else:
