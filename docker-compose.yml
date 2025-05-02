@@ -11,7 +11,12 @@ services:
       - sadtalker
 
   xtts:
-    build: ./xtts
+    build:
+      context: ./xtts
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "8001:8001"
     volumes:
@@ -19,17 +24,15 @@ services:
       - ./xtts/extracted_audios:/app/extracted_audios
       - ./xtts/generated_audios:/app/generated_audios
       - ./xtts/avatar-database.db:/app/avatar-database.db
-    # Uncomment for GPU
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+      - ./xtts/saved_avatars:/app/saved_avatars
 
   sadtalker:
-    build: ./sadtalker
+    build:
+      context: ./sadtalker
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "8002:8002"
     volumes:

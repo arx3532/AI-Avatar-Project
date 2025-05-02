@@ -79,5 +79,3 @@ def clone_output(model,gen_text,output_audio_path,temp_audio_path):
     print(f"Speech generated and saved to {output_audio_path}")
 
 
-
-

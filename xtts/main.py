@@ -33,7 +33,7 @@ class CombinedResponse(BaseModel):
 model = load_model()
 model.cpu()
 
-@app.post("/extract-audio-and-bestframe/", response_model=CombinedResponse)
+@app.post("/extract-audio-and-bestframe/", response_model=AudioResponse)
 async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...)):
     #Extract audio from uploaded video file
     try:
@@ -56,8 +56,12 @@ async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_
             user_id=user_id,
             avatar_id=avatar_id
         )
-        shutil.rmtree("uploaded_videos")
-        shutil.rmtree("extracted_audios")
+        try:
+            clear_folder("uploaded_videos")
+            clear_folder("extracted_audios")
+        except Exception as cleanup_err:
+            print(f"Cleanup failed: {cleanup_err}")
+
         return AudioResponse(
             user_id=user_id,
             avatar_id=avatar_id,
@@ -125,3 +129,14 @@ async def display_extracted_audio(user_id: str=Query(...), avatar_id: str = Quer
         raise HTTPException(status_code=500, detail=f"Error displaying extracted audio.")
     
     
+
+def clear_folder(folder_path: str):
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.remove(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(f"Failed to delete {file_path}: {e}")
