@@ -1,15 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-import httpx
-from typing import Optional
-
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
+import httpx
+import os
+import io
 
 app = FastAPI(title="AI Avatar Orchestrator")
 
@@ -28,14 +27,33 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String(255))
 
+# Avatar model for database
+class Avatar(Base):
+    __tablename__ = "avatars"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    avatar_id = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+
+# Voice model for database
+class Voice(Base):
+    __tablename__ = "voices"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    audio_id = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+
+# AvatarCreated model for storing generated videos
+class AvatarCreated(Base):
+    __tablename__ = "avatars_created"
+    user_id = Column(String, primary_key=True, index=True)
+    video_name = Column(String, nullable=False)
+    video = Column(Text, nullable=False)
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
-
-class AvatarRequest(BaseModel):
-    text: str
-    user_id: str
-    avatar_id: str
-    audio_id: str
 
 # Pydantic models for request validation
 class UserCreate(BaseModel):
@@ -47,16 +65,30 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+class AvatarRequest(BaseModel):
+    text: str
+    user_id: str
+    avatar_id: str
+    audio_id: str
+
+# Pydantic models for response
+class AvatarResponse(BaseModel):
+    id: str
+    name: str
+    created_at: str
+
+class VoiceResponse(BaseModel):
+    id: str
+    name: str
+    created_at: str
+
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# FastAPI app
-app = FastAPI()
 
 # Enable CORS to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,15 +105,11 @@ def get_db():
 # Register endpoint
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Check if email already exists
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Hash the password
     hashed_password = pwd_context.hash(user.password)
-    
-    # Create and save new user
     new_user = User(name=user.name, email=user.email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
@@ -92,27 +120,45 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 # Login endpoint
 @app.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
-    # Find user by email
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user or not pwd_context.verify(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
     return {"message": "Login successful", "email": db_user.email}
 
-
+# Extract for avatar endpoint
 @app.post('/extract-for-avatar/')
 async def extract_for_avatar(
     video: UploadFile = File(...),
     user_id: str = Form(...),
     avatar_id: str = Form(...),
-    audio_id: str = Form(...)
+    audio_id: str = Form(...),
+    db: Session = Depends(get_db)
 ):
     try:
         video_bytes = await video.read()
 
+        # Save avatar and voice to database
+        from datetime import datetime
+        new_avatar = Avatar(
+            user_id=user_id,
+            avatar_id=avatar_id,
+            name=avatar_id,
+            created_at=datetime.utcnow().isoformat()
+        )
+        new_voice = Voice(
+            user_id=user_id,
+            audio_id=audio_id,
+            name=audio_id,
+            created_at=datetime.utcnow().isoformat()
+        )
+        db.add(new_avatar)
+        db.add(new_voice)
+        db.commit()
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                 "http://127.0.0.1:8001/extract-audio-and-bestframe/",
+                "http://127.0.0.1:8001/extract-audio-and-bestframe/",
                 files={
                     "video_file": (video.filename, video_bytes, video.content_type)
                 },
@@ -121,43 +167,33 @@ async def extract_for_avatar(
                     "avatar_id": avatar_id,
                     "audio_id": audio_id
                 },
-                timeout=60.0  # optional: prevent hanging
+                timeout=60.0
             )
 
         response.raise_for_status()
         return response.json()
 
     except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Request failed: {str(e)}"
-        )
+        db.rollback()
+        raise HTTPException(status_code=503, detail=f"Request failed: {str(e)}")
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"XTTS service error: {e.response.text}"
-        )
+        db.rollback()
+        raise HTTPException(status_code=e.response.status_code, detail=f"XTTS service error: {e.response.text}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Extraction error: {str(e)}"
-        )
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Extraction error: {str(e)}")
 
-
+# Generate avatar endpoint
 @app.post("/generate-avatar/")
 async def generate_avatar(
     text: str = Form(...),
     user_id: str = Form(...),
     avatar_id: str = Form(...),
-    audio_id: str = Form(...)
+    audio_id: str = Form(...),
+    db: Session = Depends(get_db)
 ):
-    """
-    Step 2: Use extracted data to synthesize voice and generate avatar video
-    """
     try:
-        # Step 1: Synthesize voice using XTTS
         async with httpx.AsyncClient() as client:
-            print("xtts aakkaam")
             xtts_clone_response = await client.post(
                 "http://127.0.0.1:8001/synthesize-voice-frame/",
                 json={
@@ -168,18 +204,12 @@ async def generate_avatar(
                 },
                 timeout=180.0
             )
-            print("aayi")
             xtts_clone_response.raise_for_status()
-            print("aavunnu")
             clone_data = xtts_clone_response.json()
-            print('clone kazhinju')
-            print(clone_data)
             if not clone_data.get("success", False):
                 raise HTTPException(status_code=500, detail="Voice Synthesis Failed.")
 
-        # Step 2: Generate avatar video with SadTalker
         async with httpx.AsyncClient() as client:
-            print("keri4")
             sadtalker_response = await client.post(
                 "http://127.0.0.1:8002/create-avatar/",
                 data={
@@ -189,24 +219,72 @@ async def generate_avatar(
                 },
                 timeout=3600
             )
-            print('erangi')
             sadtalker_response.raise_for_status()
             video_data = sadtalker_response.json()
 
-            print("keri5")
-            return FileResponse(
-    path=video_data["video_path"],
-    media_type="video/mp4"
-)
+            video_path = video_data["video_path"]
+            video_name = f"{avatar_id}+{audio_id}"
 
+            try:
+                with open(video_path, "rb") as video_file:
+                    video_blob = video_file.read()
+            except FileNotFoundError:
+                raise HTTPException(status_code=500, detail=f"Video file not found: {video_path}")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error reading video file: {str(e)}")
+
+            new_avatar = AvatarCreated(
+                user_id=user_id,
+                video_name=video_name,
+                video=video_blob.hex()
+            )
+
+            try:
+                db.add(new_avatar)
+                db.commit()
+                db.refresh(new_avatar)
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
+
+            response = FileResponse(
+                path=video_path,
+                media_type="video/mp4"
+            )
+
+            try:
+                os.remove(video_path)
+            except Exception as e:
+                print(f"Warning: Could not delete video file {video_path}: {e}")
+
+            return response
 
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Synthesis/Avatar generation service error: {e.response.text}"
-        )
+        raise HTTPException(status_code=e.response.status_code, detail=f"Synthesis/Avatar generation service error: {e.response.text}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Avatar generation error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Avatar generation error: {str(e)}")
+
+# Get avatars endpoint
+@app.get("/avatars/{user_id}", response_model=list[AvatarResponse])
+async def get_avatars(user_id: str, db: Session = Depends(get_db)):
+    avatars = db.query(Avatar).filter(Avatar.user_id == user_id).all()
+    return [{"id": avatar.avatar_id, "name": avatar.name, "created_at": avatar.created_at} for avatar in avatars]
+
+# Get voices endpoint
+@app.get("/voices/{user_id}", response_model=list[VoiceResponse])
+async def get_voices(user_id: str, db: Session = Depends(get_db)):
+    voices = db.query(Voice).filter(Voice.user_id == user_id).all()
+    return [{"id": voice.audio_id, "name": voice.name, "created_at": voice.created_at} for voice in voices]
+
+# Get avatar video endpoint
+@app.get("/avatar/{user_id}")
+async def get_avatar(user_id: str, db: Session = Depends(get_db)):
+    avatar = db.query(AvatarCreated).filter(AvatarCreated.user_id == user_id).first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    video_data = bytes.fromhex(avatar.video)
+    return StreamingResponse(
+        io.BytesIO(video_data),
+        media_type="video/mp4",
+        headers={"Content-Disposition": f"attachment; filename={avatar.video_name}.mp4"}
+    )
