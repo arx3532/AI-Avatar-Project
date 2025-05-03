@@ -21,3 +21,5 @@ safetensors
 python-multipart==0.0.12
 uvicorn[standard]
 fastapi==0.115.12
+torch==2.7.0
+torchaudio==2.7.0

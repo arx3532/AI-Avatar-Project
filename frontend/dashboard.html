@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoiceAvy - Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* Add this CSS if not already in your styles.css */
+    .dashboard-section {
+      display: none;
+    }
+    .dashboard-section.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="dashboardPage" class="page active">
+    <div class="dashboard">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <h2>Voice<span>Avy</span></h2>
+        </div>
+        <ul class="nav-list">
+          <li class="nav-item">
+            <a href="#uploadSection" class="nav-link active" data-section="uploadSection">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <span>Upload Video</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#generateSection" class="nav-link" data-section="generateSection">
+              <i class="fas fa-file-video"></i>
+              <span>Create Video</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#videosSection" class="nav-link" data-section="videosSection">
+              <i class="fas fa-film"></i>
+              <span>My Videos</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" id="logoutBtn">
+              <i class="fas fa-sign-out-alt"></i>
+              <span>Logout</span>
+            </a>
+          </li>
+        </ul>
+      </aside>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <!-- Upload Video Section -->
+        <div id="uploadSection" class="dashboard-section active">
+          <h2 class="section-title">Upload Video</h2>
+          <p class="mb-4">Upload a video to extract avatar and clone voice</p>
+          
+          <div class="input-row">
+            <div class="form-group">
+              <label for="avatarName" class="form-label">Avatar Name</label>
+              <input type="text" class="form-control" id="avatarName" placeholder="Enter a unique name for your avatar">
+            </div>
+            <div class="form-group">
+              <label for="voiceName" class="form-label">Voice Name</label>
+              <input type="text" class="form-control" id="voiceName" placeholder="Enter a unique name for your voice">
+            </div>
+          </div>
+          
+          <div class="upload-container" id="uploadBox">
+            <input type="file" id="fileInput" accept="video/*">
+            <div class="upload-icon">
+              <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <div class="upload-text">
+              <p>Drag & drop your video here or</p>
+              <div class="upload-btn">Browse Files</div>
+            </div>
+            <p class="small text-muted">Supported formats: MP4, MOV, AVI (Max 100MB)</p>
+          </div>
+          
+          <button class="btn btn-primary btn-block" id="uploadBtn" disabled>Upload and Process</button>
+          
+          <div class="progress-container" id="progressContainer">
+            <div class="progress">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="progress-text">
+              <span id="progressStatus">Processing...</span>
+              <span id="progressPercentage">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generate Video Section -->
+        <div id="generateSection" class="dashboard-section">
+          <h2 class="section-title">Generate Video From Script</h2>
+          <p class="mb-4">Create a new video with your avatar and voice</p>
+          
+          <div class="form-group">
+            <label for="scriptText" class="form-label">Script</label>
+            <textarea class="form-control script-textarea" id="scriptText" placeholder="Enter your script here..."></textarea>
+          </div>
+          
+          <div class="selector-row">
+            <div class="form-group">
+              <label for="avatarSelect" class="form-label">Select Avatar</label>
+              <select class="form-control" id="avatarSelect">
+                <option value="">-- Select Avatar --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="voiceSelect" class="form-label">Select Voice</label>
+              <select class="form-control" id="voiceSelect">
+                <option value="">-- Select Voice --</option>
+              </select>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary btn-block" id="generateBtn" disabled>Generate Video</button>
+          
+          <div class="progress-container" id="generateProgressContainer">
+            <div class="progress">
+              <div class="progress-bar" id="generateProgressBar"></div>
+            </div>
+            <div class="progress-text">
+              <span id="generateProgressStatus">Processing...</span>
+              <span id="generateProgressPercentage">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- My Generated Videos Section -->
+        <div id="videosSection" class="dashboard-section">
+          <h2 class="section-title">My Generated Videos</h2>
+          
+          <div class="videos-grid" id="videosGrid">
+            <!-- Video cards will be dynamically generated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Preview Modal -->
+  <div class="modal-backdrop" id="videoModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="videoModalTitle">Video Preview</h3>
+        <button class="modal-close" id="closeVideoModal">×</button>
+      </div>
+      <div class="modal-body">
+        <video id="videoPlayer" controls style="width: 100%;">
+          <source src="/api/placeholder/400/320" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Simple tab navigation script (to avoid modifying the app.js file)
+    document.addEventListener('DOMContentLoaded', function() {
+      const navLinks = document.querySelectorAll('.nav-link[data-section]');
+      const dashboardSections = document.querySelectorAll('.dashboard-section');
+      
+      navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const sectionId = this.getAttribute('data-section');
+          
+          // Update active class for links
+          navLinks.forEach(navLink => navLink.classList.remove('active'));
+          this.classList.add('active');
+          
+          // Show the corresponding section
+          dashboardSections.forEach(section => {
+            if (section.id === sectionId) {
+              section.classList.add('active');
+            } else {
+              section.classList.remove('active');
+            }
+          });
+        });
+      });
+    });
+  </script>
+</body>
+</html>

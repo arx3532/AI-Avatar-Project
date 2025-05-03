@@ -31,8 +31,8 @@ class CombinedResponse(BaseModel):
     user_id: str
     avatar_id: str
     audio_id: str
-    audio_path : Optional[str] = None
-    frame_path: Optional[str] = None
+    success: bool
+
 
 model = load_model()
 model.cpu()
@@ -40,6 +40,7 @@ model.cpu()
 @app.post("/extract-audio-and-bestframe/", response_model=CombinedResponse)
 async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_id: str = Form(...), avatar_id: str = Form(...), audio_id: str = Form(...)):
     #Extract audio from uploaded video file
+    print("RUNNING@!!!")
     try:
         if not video_file.filename.lower().endswith(('.mp4','.mov','.avi')):
             raise HTTPException(status_code=400, detail="Invalid File Format.")
@@ -70,8 +71,7 @@ async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_
             user_id=user_id,
             audio_id=audio_id,
             avatar_id=avatar_id,
-            audio_path=audio_path,
-            frame_path=f"../shared/extracted_frames/{user_id}_{avatar_id}_frame.jpg"
+            success= True
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
@@ -79,7 +79,10 @@ async def extract_audio_frame_endpoint(video_file: UploadFile = File(...), user_
 
 @app.post('/synthesize-voice-frame/', response_model=CombinedResponse)
 async def synthesize_endpoint(request: GeneratorRequest):
+    print("keri")
     try:
+        print(request.user_id)
+        print("keri2")
         if not request.text:
             raise HTTPException(status_code=400, detail='Text input is required!')
         
@@ -88,19 +91,16 @@ async def synthesize_endpoint(request: GeneratorRequest):
         temp_audio_path = load_audio(request.user_id, request.audio_id)
         clone_output(model, request.text, output_audio_path, temp_audio_path)
         
-        os.makedirs("../shared/saved_avatars", exist_ok=True)
-        image_np = load_image_from_db(request.user_id, request.avatar_id)
-        filename = f"{request.user_id}_{request.avatar_id}.png"
-        frame_path = os.path.join("../shared/saved_avatars", filename)
-        cv2.imwrite(frame_path, image_np)
-
+        print("kazhinju")
+        print(f"user_id={request.user_id}")
+        
         return CombinedResponse(
             user_id=request.user_id,
             avatar_id = request.avatar_id,
             audio_id = request.audio_id,
-            audio_path=output_audio_path,
-            frame_path=frame_path
+            success= True
         )
+    
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
